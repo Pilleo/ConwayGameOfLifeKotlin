@@ -193,7 +193,7 @@ class ConwayOOPTest {
 
 
         }
-        val set =HashSet<Cell>()
+        val set =TreeSet<Cell>()
 
         mapIndexed.forEach{e-> set.addAll(e)}
         return set

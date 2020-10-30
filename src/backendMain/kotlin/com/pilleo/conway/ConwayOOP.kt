@@ -1,18 +1,21 @@
 package com.pilleo.conway
 
+import java.util.*
+import kotlin.collections.HashSet
+
 // http://rosettacode.org/wiki/Conway%27s_Game_of_Life#Kotlin
 
 fun main() {
-    val listOf = linkedSetOf<Cell>(
-        Cell(0, 1),
-        Cell(1, 0),
-        Cell(2, 2),
-        Cell(3, 2),
-        Cell(4, 2),
-        Cell(5, 2),
-        Cell(6, 2),
-        Cell(7, 3),
-        Cell(7, 4)
+    val listOf = sortedSetOf<Cell>(
+            Cell(0, 1),
+            Cell(1, 0),
+            Cell(2, 2),
+            Cell(3, 2),
+            Cell(4, 2),
+            Cell(5, 2),
+            Cell(6, 2),
+            Cell(7, 3),
+            Cell(7, 4)
     )
 
     ConwayOOP(8, 8, true).play(listOf)
@@ -23,50 +26,53 @@ data class Cell(val x: Int, val y: Int, var isAlive: Boolean = true) : Comparabl
 
     override fun compareTo(other: Cell): Int {
         // val aliveVar = if (isAlive) 1 else -1
-
-        return if (this.x == other.x) {
-            this.y - other.y
-        } else {
-            this.x - other.x
-        }
+        if (this.y < other.y) return -1;
+        if (this.y > other.y) return +1;
+        if (this.x < other.x) return -1;
+        if (this.x > other.x) return +1;
+        return 0;
     }
 }
 
-data class Delta(val newAliveCells: List<Cell>,
-                 val newDaedCells: List<Cell>)
-
 class ConwayOOP(
-    private val height: Int,
-    private val width: Int,
-    private val endOfTheWorldPortals: Boolean,
-    private val board: Array<Array<Cell>> = Array(height) { row ->
-        Array(width) { column -> Cell(column, row, false) }
-    }
+        private val height: Int,
+        private val width: Int,
+        private val endOfTheWorldPortals: Boolean,
+        private val board: Array<Array<Cell>> = Array(height) { row ->
+            Array(width) { column -> Cell(column, row, false) }
+        }
 ) {
 
     tailrec fun play(currentlyAliveCells: Set<Cell>, prevWorlds: Set<Set<Cell>> = HashSet()): Set<Set<Cell>> {
-        if (currentlyAliveCells.isEmpty() || prevWorlds.contains(currentlyAliveCells)) return prevWorlds
+        val contains = prevWorlds.contains(currentlyAliveCells)
+        if (currentlyAliveCells.isEmpty() || contains) return prevWorlds
         currentlyAliveCells.forEach { board[it.y][it.x].isAlive = true }
 
         printBoard(currentlyAliveCells)
-        val (newAliveCells, newDaedCells) = getNewWorldFromOldWorld(currentlyAliveCells)
-        newAliveCells.forEach { board[it.y][it.x].isAlive = true }
-        newDaedCells.forEach { board[it.y][it.x].isAlive = false }
 
-        val newWorldFromCurrentWorld: Set<Cell> = currentlyAliveCells
-            .plus(newAliveCells)
-            .minus(newDaedCells)
+        val (cellsToDie, cellsToLive) = findDeltaToChange(currentlyAliveCells)
+                .map { it.copy() }
+                .partition { it.isAlive }
 
+        val sortedSetOf = TreeSet(currentlyAliveCells)
+
+        cellsToLive.forEach { it.isAlive = true
+            board[it.y][it.x].isAlive = true
+        }
+
+        cellsToDie.forEach {              board[it.y][it.x].isAlive = false}
+        sortedSetOf.addAll(cellsToLive)
+        sortedSetOf.removeAll(cellsToDie)
+        val newWorldFromCurrentWorld: Set<Cell> = sortedSetOf
 
         return play(newWorldFromCurrentWorld, prevWorlds.plusElement(currentlyAliveCells))
     }
 
-    private fun getNewWorldFromOldWorld(oldMap: Set<Cell>): Delta {
+    private fun findDeltaToChange(oldMap: Set<Cell>): Set<Cell> {
 
         fun getNeighbours(inputCell: Cell): Set<Cell> {
 
             val set: MutableSet<Cell> = HashSet()
-
 
             if (inputCell.x > 0) {
                 set.add(board[inputCell.y][inputCell.x - 1])
@@ -101,90 +107,52 @@ class ConwayOOP(
             return set.mapTo(HashSet()) { it.copy() }
         }
 
-        fun getAllPossibleNeighbours(cell: Cell): Set<Cell> {
+        fun teleportOutOfWorldCellToOtherEnd(cell: Cell): Cell {
 
-            fun teleportOutOfWorldCellToOtherEnd(cell: Cell): Cell {
-
-                val resX: Int =
+            val resX: Int =
                     when {
                         cell.x < 0 -> width - 1
                         cell.x >= width -> 0
                         else -> cell.x
                     }
 
-                val resY: Int =
+            val resY: Int =
                     when {
                         cell.y >= height -> 0
                         cell.y < 0 -> height - 1
                         else -> cell.y
                     }
 
-                return if (cell.x == resX && cell.y == resY) cell
-                else Cell(resX, resY)
-            }
-
-            val x: Int = cell.x
-            val y: Int = cell.y
-            val of: MutableSet<Cell> = mutableSetOf(
-
-                Cell(x, y - 1),
-                Cell(x, y + 1),
-                Cell(x + 1, y - 1),
-
-                Cell(x + 1, y + 1)
-            )
-
-            if (x > 0) {
-                of.add(Cell(x - 1, y))
-                if (y > 0) {
-                    of.add(Cell(x - 1, y - 1))
-                }
-                if (y < height - 1) {
-                    of.add(Cell(x - 1, y + 1))
-                }
-            }
-
-            if (x < width - 1) {
-                of.add(Cell(x + 1, y))
-
-            }
-
-            val neighbours = getNeighbours(cell)
-            val set = of
-                .asSequence()
-                //.map{teleportOutOfWorldCellToOtherEnd(it)}
-                .filter { it.x >= 0 }
-                .filter { it.x < width }
-                .filter { it.y < height }
-                .filter { it.y >= 0 }
-                .toHashSet()
-            return neighbours
+            return if (cell.x == resX && cell.y == resY) cell
+            else Cell(resX, resY)
         }
-
-
 
         fun getAliveNeighbours(inputCell: Cell): Set<Cell> {
             return getNeighbours(inputCell).filterTo(HashSet()) { it.isAlive }
         }
 
         fun cellIsAlive(cell: Cell): Boolean = board[cell.y][cell.x].isAlive
-        fun deadCellWillBeAlive(cell: Cell): Boolean = getAliveNeighbours(cell).size == 3
+        fun deadCellWillBecomeAlive(cell: Cell): Boolean = getAliveNeighbours(cell).size == 3
 
         fun aliveCellWillLive(cell: Cell): Boolean {
             val size: Int = getAliveNeighbours(cell).size
             return size == 2 || size == 3
         }
 
+        fun cellWillChange(cell: Cell): Boolean {
+            return if (cellIsAlive(cell)) {
+                !aliveCellWillLive(cell)
+            } else {
+                deadCellWillBecomeAlive(cell)
+            }
+        }
 
-        val (aliveCells, hotDeadCells) = oldMap
-            .flatMap { getAllPossibleNeighbours(it).plusElement(it) }
-            .partition { cellIsAlive(it) }
-
-        val newlyKilledCells = aliveCells.filter { !aliveCellWillLive(it) }
-        val newAliveCells = hotDeadCells.filter { deadCellWillBeAlive(it) }
-newlyKilledCells.forEach { it.isAlive=false }
-        newAliveCells.forEach { it.isAlive=true }
-        return Delta(newAliveCells, newlyKilledCells)
+        return oldMap
+                .flatMap { getNeighbours(it).plusElement(it) }
+                .filter { cellWillChange(it) }
+                .distinct()
+                .map { it.copy() }
+                .toHashSet()
 
     }
 
